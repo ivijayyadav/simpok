@@ -43,5 +43,6 @@ def _tdgl_run(
         Int(py=params[7]),
         Int(py=params[8]),
         Bool(py=params[9]),
+        Int(py=params[10]),
     )
     return PythonObject(backend)

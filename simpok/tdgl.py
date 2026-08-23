@@ -1,14 +1,13 @@
 import time
-
 import numpy as np
-
-from ._result import Result, make_meta
-
+from ._result import Result, device_code, make_meta
 
 class TDGL:
     def __init__(self, n=256, dx=1.0, dt=0.1, h=0.0, eps=0.0,
-                 dtype=np.float64):
+                 dtype=np.float64, device="auto"):
         dtype = np.dtype(dtype)
+        self._device_code = device_code(device)
+        self.device = device
         if dtype not in (np.dtype(np.float32), np.dtype(np.float64)):
             raise ValueError(
                 f"dtype must be float32 or float64, got {dtype.name}"
@@ -98,6 +97,7 @@ class TDGL:
             self.seed,
             self.step,
             self.dtype == np.dtype(np.float32),
+            self._device_code,
         )
 
         t0 = time.perf_counter()
@@ -122,6 +122,7 @@ class TDGL:
             step_start=step_start,
             step_end=self.step,
             backend=self.backend,
+            device=self.device,
             elapsed=elapsed,
         )
         return Result(snaps, meta)

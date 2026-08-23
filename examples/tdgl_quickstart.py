@@ -10,7 +10,7 @@ snaps, meta = sim.run(steps=5000, nevery=100)
 t = meta["times"]
 
 for key in ("solver", "backend", "device", "dtype", "n", "dx", "dt",
-            "eps", "seed", "steps", "nevery"):
+            "eps", "seed", "steps", "nevery", "device_request"):
     print(f"{key:<14}: {meta[key]}")
     
 print(f"{'snapshots':<14}: {snaps.shape}")

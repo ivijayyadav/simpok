@@ -3,6 +3,7 @@ from typing import NamedTuple
 import numpy as np
 
 _DEVICE_NAME = None
+_DEVICE_CODES = {"auto": 0, "accelerator": 1, "gpu": 1, "cpu": 2}
 
 
 class Result(NamedTuple):
@@ -20,8 +21,17 @@ def device_name():
     return _DEVICE_NAME
 
 
+def device_code(device):
+    try:
+        return _DEVICE_CODES[device]
+    except (KeyError, TypeError):
+        raise ValueError(
+            f"device must be one of {sorted(_DEVICE_CODES)}, got {device!r}"
+        ) from None
+
+
 def make_meta(solver, *, n, dx, dt, dtype, seed, amplitude, steps, nevery,
-              step_start, step_end, backend, elapsed, **physics):
+              step_start, step_end, backend, device, elapsed, **physics):
     nsnap = steps // nevery
     meta = {"solver": solver, "n": n, "dx": dx, "dt": dt}
     meta.update(physics)
@@ -38,6 +48,7 @@ def make_meta(solver, *, n, dx, dt, dtype, seed, amplitude, steps, nevery,
             "times": (step_start + np.arange(1, nsnap + 1) * nevery) * dt,
             "backend": backend,
             "device": device_name(),
+            "device_request": device,
             "elapsed": elapsed,
         }
     )

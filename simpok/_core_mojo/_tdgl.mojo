@@ -2,11 +2,12 @@ from std.math import ceildiv, sqrt
 from std.memory import unsafe_memcpy
 from std.memory.alloc import alloc, Layout
 from std.sys import has_accelerator, size_of
+from std.sys.info import has_apple_gpu_accelerator
 from std.gpu import global_idx
 from max.gpu.host import DeviceContext
 from layout import TileTensor, TensorLayout, row_major
 
-from ._utils import gaussian, TPB
+from ._utils import gaussian, TPB, DEVICE_ACCEL, DEVICE_CPU
 
 
 def _update[dt: DType](
@@ -139,7 +140,7 @@ def _run_cpu[dt: DType](
     return String("cpu")
 
 
-def _run_gpu[dt: DType](
+def _run_accel[dt: DType](
     field: Pointer[Scalar[dt], MutAnyOrigin],
     snaps_addr: Int,
     n: Int,
@@ -188,7 +189,7 @@ def _run_gpu[dt: DType](
 
     ctx.enqueue_copy(dst_ptr=field, src_buf=a)
     ctx.synchronize()
-    return String("gpu")
+    return String("accelerator")
 
 
 def _dispatch[dt: DType](
@@ -203,6 +204,7 @@ def _dispatch[dt: DType](
     eps: Float64,
     seed: Int,
     step0: Int,
+    device: Int,
 ) raises -> String:
     var field = Pointer[Scalar[dt], MutAnyOrigin](
         unsafe_from_address=field_addr
@@ -215,21 +217,51 @@ def _dispatch[dt: DType](
     var samp = Scalar[dt](amp)
     var useed = UInt64(seed)
 
+    comptime no_f64_on_accel = (
+        has_apple_gpu_accelerator() and dt == DType.float64
+    )
+
     comptime if not has_accelerator():
+        if device == DEVICE_ACCEL:
+            raise Error(
+                "accelerator requested but this build has no supported"
+                " accelerator"
+            )
         return _run_cpu[dt](
             field, snaps_addr, n, nsteps, nevery, sdt, sidx, sh,
             samp, useed, step0,
         )
     else:
-        if DeviceContext.number_of_devices() == 0:
+        comptime if no_f64_on_accel:
+            if device == DEVICE_ACCEL:
+                raise Error(
+                    "accelerator requested but it has no float64"
+                    " support; use dtype=float32"
+                )
             return _run_cpu[dt](
                 field, snaps_addr, n, nsteps, nevery, sdt, sidx, sh,
                 samp, useed, step0,
             )
-        return _run_gpu[dt](
-            field, snaps_addr, n, nsteps, nevery, sdt, sidx, sh,
-            samp, useed, step0,
-        )
+        else:
+            if device == DEVICE_CPU:
+                return _run_cpu[dt](
+                    field, snaps_addr, n, nsteps, nevery, sdt, sidx, sh,
+                    samp, useed, step0,
+                )
+            if DeviceContext.number_of_devices() == 0:
+                if device == DEVICE_ACCEL:
+                    raise Error(
+                        "accelerator requested but none was detected"
+                        " at runtime"
+                    )
+                return _run_cpu[dt](
+                    field, snaps_addr, n, nsteps, nevery, sdt, sidx, sh,
+                    samp, useed, step0,
+                )
+            return _run_accel[dt](
+                field, snaps_addr, n, nsteps, nevery, sdt, sidx, sh,
+                samp, useed, step0,
+            )
 
 
 def run_tdgl(
@@ -245,13 +277,14 @@ def run_tdgl(
     seed: Int,
     step0: Int,
     single: Bool,
+    device: Int,
 ) raises -> String:
     if single:
         return _dispatch[DType.float32](
             field_addr, snaps_addr, n, nsteps, nevery, step_dt, dx, h,
-            eps, seed, step0,
+            eps, seed, step0, device,
         )
     return _dispatch[DType.float64](
         field_addr, snaps_addr, n, nsteps, nevery, step_dt, dx, h,
-        eps, seed, step0,
+        eps, seed, step0, device,
     )

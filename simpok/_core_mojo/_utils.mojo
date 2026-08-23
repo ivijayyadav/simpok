@@ -2,6 +2,10 @@ from std.math import sqrt, log, cos
 from std.sys import has_accelerator
 from max.gpu.host import DeviceContext
 
+comptime DEVICE_AUTO = 0
+comptime DEVICE_ACCEL = 1
+comptime DEVICE_CPU = 2
+
 comptime TPB = 16
 comptime GOLDEN = 0x9E3779B97F4A7C15
 comptime TWO_PI = 6.283185307179586
