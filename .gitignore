@@ -1,0 +1,12 @@
+# pixi environments
+.pixi/*
+!.pixi/config.toml
+
+__pycache__/
+__mojocache__/
+*.so
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+
