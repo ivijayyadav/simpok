@@ -1,1 +1,1 @@
-from ._utils import __get_device
+from ._utils import get_device
