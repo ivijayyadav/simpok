@@ -7,8 +7,12 @@ version = "0.1.0"
 
 [tasks]
 quick = "python -m examples.quickstart"
+tdgl = "python -m examples.tdgl_quickstart"
 
 [dependencies]
 python = "3.13.*"
 mojo = ">=1.0.0,<2"
 max = ">=26.5.0,<27"
+numpy = ">=2.5.2,<3"
+matplotlib = ">=3.11.1,<4"
+seaborn = ">=0.13.2,<0.14"
