@@ -1,3 +1,131 @@
-"""
-Work in progress
-"""
+import time
+import numpy as np
+from ._result import Result, device_code, make_meta
+
+class CHC:
+    def __init__(self, n=256, dx=1.0, dt=0.01, eps=0.0,
+                 dtype=np.float64, device="auto"):
+        dtype = np.dtype(dtype)
+        self._device_code = device_code(device)
+        self.device = device
+        if dtype not in (np.dtype(np.float32), np.dtype(np.float64)):
+            raise ValueError(
+                f"dtype must be float32 or float64, got {dtype.name}"
+            )
+        if int(n) != n or n < 5:
+            raise ValueError(f"n must be an integer >= 5, got {n!r}")
+        if dx <= 0.0:
+            raise ValueError(f"dx must be positive, got {dx!r}")
+        if dt <= 0.0:
+            raise ValueError(f"dt must be positive, got {dt!r}")
+        if eps < 0.0:
+            raise ValueError(f"eps must be non-negative, got {eps!r}")
+
+        q = 8.0 / (dx * dx)
+        growth = q * q - q
+        if growth > 0.0:
+            limit = 2.0 / growth
+            if dt > limit:
+                raise ValueError(
+                    f"dt={dt} exceeds the explicit-Euler stability limit "
+                    f"{limit} for the 2-d 5-point biharmonic at dx={dx}"
+                )
+
+        self.n = int(n)
+        self.dx = float(dx)
+        self.dt = float(dt)
+        self.eps = float(eps)
+        self.dtype = dtype
+
+        self.psi = None
+        self.seed = 0
+        self.amplitude = 0.0
+        self.psi0 = 0.0
+        self.step = 0
+        self.backend = None
+
+    def ic(self, seed=0, amplitude=0.01, psi0=0.0):
+        if amplitude <= 0.0:
+            raise ValueError(f"amplitude must be positive, got {amplitude!r}")
+
+        rng = np.random.default_rng(seed)
+        self.psi = (
+            psi0 + rng.uniform(-amplitude, amplitude, size=(self.n, self.n))
+        ).astype(self.dtype)
+        self.seed = int(seed)
+        self.amplitude = float(amplitude)
+        self.psi0 = float(psi0)
+        self.step = 0
+        return self
+
+    @property
+    def t(self):
+        return self.step * self.dt
+
+    def run(self, steps, nevery):
+        if self.psi is None:
+            raise RuntimeError("call ic() before run()")
+        if np.shape(self.psi) != (self.n, self.n):
+            raise ValueError(
+                f"psi has shape {np.shape(self.psi)}, expected "
+                f"{(self.n, self.n)}"
+            )
+        if int(steps) != steps or steps < 1:
+            raise ValueError(f"steps must be a positive integer, got {steps!r}")
+        if int(nevery) != nevery or nevery < 1:
+            raise ValueError(
+                f"nevery must be a positive integer, got {nevery!r}"
+            )
+        if nevery > steps:
+            raise ValueError(f"nevery={nevery} exceeds steps={steps}")
+
+        steps = int(steps)
+        nevery = int(nevery)
+        nsnap = steps // nevery
+        step_start = self.step
+
+        import mojo.importer  # noqa: F401
+
+        from .mojo_module import _chc_run
+
+        field = np.ascontiguousarray(self.psi, dtype=self.dtype)
+        snaps = np.empty((nsnap, self.n, self.n), dtype=self.dtype)
+        params = (
+            self.n,
+            steps,
+            nevery,
+            self.dt,
+            self.dx,
+            self.eps,
+            self.seed,
+            self.step,
+            self.dtype == np.dtype(np.float32),
+            self._device_code,
+        )
+
+        t0 = time.perf_counter()
+        self.backend = _chc_run(field, snaps, params)
+        elapsed = time.perf_counter() - t0
+
+        self.psi = field
+        self.step += steps
+
+        meta = make_meta(
+            "chc",
+            n=self.n,
+            dx=self.dx,
+            dt=self.dt,
+            eps=self.eps,
+            psi0=self.psi0,
+            dtype=self.dtype,
+            seed=self.seed,
+            amplitude=self.amplitude,
+            steps=steps,
+            nevery=nevery,
+            step_start=step_start,
+            step_end=self.step,
+            backend=self.backend,
+            device=self.device,
+            elapsed=elapsed,
+        )
+        return Result(snaps, meta)
