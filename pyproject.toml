@@ -1,0 +1,55 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "simpok"
+version = "0.1.0"
+description = "High-level Python API for phase-ordering kinetics, with the computation in Mojo"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "vijay", email = "vijpiml@gmail.com" }]
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = [
+    "phase-field",
+    "phase-ordering",
+    "spinodal-decomposition",
+    "cahn-hilliard",
+    "ginzburg-landau",
+    "mojo",
+    "gpu",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS :: MacOS X",
+]
+dependencies = [
+    "numpy>=1.24",
+    "mojo>=1.0,<2",
+    "max>=26.5,<27",
+]
+
+[project.optional-dependencies]
+examples = ["matplotlib>=3.8"]
+
+[project.urls]
+Homepage = "https://github.com/ivijayyadav/simpok"
+Repository = "https://github.com/ivijayyadav/simpok"
+Issues = "https://github.com/ivijayyadav/simpok/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["simpok"]
+exclude = ["__mojocache__", "__pycache__"]
+
+[tool.hatch.build.targets.sdist]
+include = ["simpok", "examples", "README.md", "pyproject.toml"]
+exclude = ["__mojocache__", "__pycache__"]

@@ -5,10 +5,11 @@ import matplotlib.pyplot as plt
 from simpok import CHC
 import numpy as np
 
-steps = 50000
-nevery = 500
+steps = 500000
+nevery = 5000
+device = "auto"
 
-sim = CHC(device="cpu").ic(seed=0)
+sim = CHC(device=device).ic(seed=0)
 snaps, meta = sim.run(steps=steps, nevery=nevery)
 
 t = meta["times"]
