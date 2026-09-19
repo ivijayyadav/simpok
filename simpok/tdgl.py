@@ -1,10 +1,10 @@
 import time
 import numpy as np
-from ._result import Result, device_code, make_meta
+from ._result import Result, call_solver, device_code, make_meta
 
 class TDGL:
-    def __init__(self, n=256, dx=1.0, dt=0.1, h=0.0, eps=0.0,
-                 dtype=np.float64, device="auto"):
+    def __init__(self, ny=256, nx=256, dx=1.0, dt=0.1, h=0.0, eps=0.0,
+                 dtype=np.float64, device=None):
         dtype = np.dtype(dtype)
         self._device_code = device_code(device)
         self.device = device
@@ -12,8 +12,10 @@ class TDGL:
             raise ValueError(
                 f"dtype must be float32 or float64, got {dtype.name}"
             )
-        if int(n) != n or n < 3:
-            raise ValueError(f"n must be an integer >= 3, got {n!r}")
+        if int(ny) != ny or ny < 3:
+            raise ValueError(f"ny must be an integer >= 3, got {ny!r}")
+        if int(nx) != nx or nx < 3:
+            raise ValueError(f"nx must be an integer >= 3, got {nx!r}")
         if dx <= 0.0:
             raise ValueError(f"dx must be positive, got {dx!r}")
         if dt <= 0.0:
@@ -28,7 +30,8 @@ class TDGL:
                 f"dx^2/4={limit} for the 2-d 5-point Laplacian"
             )
 
-        self.n = int(n)
+        self.ny = int(ny)
+        self.nx = int(nx)
         self.dx = float(dx)
         self.dt = float(dt)
         self.h = float(h)
@@ -41,13 +44,17 @@ class TDGL:
         self.step = 0
         self.backend = None
 
+    @property
+    def shape(self):
+        return (self.ny, self.nx)
+
     def ic(self, seed=0, amplitude=0.01):
         if amplitude <= 0.0:
             raise ValueError(f"amplitude must be positive, got {amplitude!r}")
 
         rng = np.random.default_rng(seed)
         self.psi = rng.uniform(
-            -amplitude, amplitude, size=(self.n, self.n)
+            -amplitude, amplitude, size=(self.ny, self.nx)
         ).astype(self.dtype)
         self.seed = int(seed)
         self.amplitude = float(amplitude)
@@ -61,10 +68,10 @@ class TDGL:
     def run(self, steps, nevery):
         if self.psi is None:
             raise RuntimeError("call ic() before run()")
-        if np.shape(self.psi) != (self.n, self.n):
+        if np.shape(self.psi) != (self.ny, self.nx):
             raise ValueError(
                 f"psi has shape {np.shape(self.psi)}, expected "
-                f"{(self.n, self.n)}"
+                f"{(self.ny, self.nx)}"
             )
         if int(steps) != steps or steps < 1:
             raise ValueError(f"steps must be a positive integer, got {steps!r}")
@@ -85,9 +92,10 @@ class TDGL:
         from .mojo_module import _tdgl_run
 
         field = np.ascontiguousarray(self.psi, dtype=self.dtype)
-        snaps = np.empty((nsnap, self.n, self.n), dtype=self.dtype)
+        snaps = np.empty((nsnap, self.ny, self.nx), dtype=self.dtype)
         params = (
-            self.n,
+            self.ny,
+            self.nx,
             steps,
             nevery,
             self.dt,
@@ -101,7 +109,7 @@ class TDGL:
         )
 
         t0 = time.perf_counter()
-        self.backend = _tdgl_run(field, snaps, params)
+        self.backend = call_solver(_tdgl_run, (field, snaps), params)
         elapsed = time.perf_counter() - t0
 
         self.psi = field
@@ -109,7 +117,7 @@ class TDGL:
 
         meta = make_meta(
             "tdgl",
-            n=self.n,
+            grid={"ny": self.ny, "nx": self.nx},
             dx=self.dx,
             dt=self.dt,
             h=self.h,

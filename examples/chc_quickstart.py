@@ -5,16 +5,16 @@ import matplotlib.pyplot as plt
 from simpok import CHC
 import numpy as np
 
-steps = 500000
-nevery = 5000
-device = "auto"
+steps = 50000
+nevery = 1000
+device = None
 
 sim = CHC(device=device).ic(seed=0)
 snaps, meta = sim.run(steps=steps, nevery=nevery)
 
 t = meta["times"]
 
-for key in ("solver", "backend", "device", "dtype", "n", "dx", "dt",
+for key in ("solver", "backend", "device", "dtype", "ny", "nx", "dx", "dt",
             "eps", "psi0", "seed", "steps", "nevery", "device_request"):
     print(f"{key:<14}: {meta[key]}")
 

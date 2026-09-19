@@ -13,7 +13,7 @@ snaps, meta = sim.run(steps=steps, nevery=nevery)
 
 t = meta["times"]
 
-for key in ("solver", "backend", "device", "dtype", "n", "dx", "dt",
+for key in ("solver", "backend", "device", "dtype", "ny", "nx", "dx", "dt",
             "eps", "seed", "steps", "nevery", "device_request"):
     print(f"{key:<14}: {meta[key]}")
     

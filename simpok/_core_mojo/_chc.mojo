@@ -47,21 +47,22 @@ def _update[dt: DType](
 
 
 def _divnoise[dt: DType](
-    n: Int, i: Int, j: Int, im: Int, jm: Int, seed: UInt64, step: UInt64
+    nx: Int, i: Int, j: Int, im: Int, jm: Int, seed: UInt64, step: UInt64
 ) -> Scalar[dt]:
-    var here = UInt64(2 * (i * n + j))
+    var here = UInt64(2 * (i * nx + j))
     return (
         gaussian[dt](seed, step, here)
-        - gaussian[dt](seed, step, UInt64(2 * (i * n + jm)))
+        - gaussian[dt](seed, step, UInt64(2 * (i * nx + jm)))
         + gaussian[dt](seed, step, here + 1)
-        - gaussian[dt](seed, step, UInt64(2 * (im * n + j) + 1))
+        - gaussian[dt](seed, step, UInt64(2 * (im * nx + j) + 1))
     )
 
 
 def _step_kernel[dt: DType, LT: TensorLayout](
     psi: TileTensor[dt, LT, MutAnyOrigin],
     nxt: TileTensor[dt, LT, MutAnyOrigin],
-    n: Int32,
+    ny: Int32,
+    nx: Int32,
     step_dt: Scalar[dt],
     inv_dx2: Scalar[dt],
     noise_amp: Scalar[dt],
@@ -70,20 +71,21 @@ def _step_kernel[dt: DType, LT: TensorLayout](
 ):
     comptime assert psi.flat_rank == 2, "field must be 2d"
     comptime assert nxt.flat_rank == 2, "field must be 2d"
-    var nn = Int(n)
+    var ry = Int(ny)
+    var rx = Int(nx)
     var j = Int(global_idx.x)
     var i = Int(global_idx.y)
-    if i >= nn or j >= nn:
+    if i >= ry or j >= rx:
         return
 
-    var ip = i + 1 if i + 1 < nn else i + 1 - nn
-    var im = i - 1 if i >= 1 else i - 1 + nn
-    var jp = j + 1 if j + 1 < nn else j + 1 - nn
-    var jm = j - 1 if j >= 1 else j - 1 + nn
-    var ipp = i + 2 if i + 2 < nn else i + 2 - nn
-    var imm = i - 2 if i >= 2 else i - 2 + nn
-    var jpp = j + 2 if j + 2 < nn else j + 2 - nn
-    var jmm = j - 2 if j >= 2 else j - 2 + nn
+    var ip = i + 1 if i + 1 < ry else i + 1 - ry
+    var im = i - 1 if i >= 1 else i - 1 + ry
+    var jp = j + 1 if j + 1 < rx else j + 1 - rx
+    var jm = j - 1 if j >= 1 else j - 1 + rx
+    var ipp = i + 2 if i + 2 < ry else i + 2 - ry
+    var imm = i - 2 if i >= 2 else i - 2 + ry
+    var jpp = j + 2 if j + 2 < rx else j + 2 - rx
+    var jmm = j - 2 if j >= 2 else j - 2 + rx
 
     var v = _update[dt](
         rebind[Scalar[dt]](psi[i, j]),
@@ -103,56 +105,58 @@ def _step_kernel[dt: DType, LT: TensorLayout](
         inv_dx2,
     )
     if noise_amp != 0.0:
-        v += noise_amp * _divnoise[dt](nn, i, j, im, jm, seed, step)
+        v += noise_amp * _divnoise[dt](rx, i, j, im, jm, seed, step)
     nxt[i, j] = rebind[nxt.ElementType](v)
 
 
 def _step_cpu[dt: DType](
     psi: Pointer[Scalar[dt], MutAnyOrigin],
     nxt: Pointer[Scalar[dt], MutAnyOrigin],
-    n: Int,
+    ny: Int,
+    nx: Int,
     step_dt: Scalar[dt],
     inv_dx2: Scalar[dt],
     noise_amp: Scalar[dt],
     seed: UInt64,
     step: UInt64,
 ):
-    for i in range(n):
-        var ip = i + 1 if i + 1 < n else i + 1 - n
-        var im = i - 1 if i >= 1 else i - 1 + n
-        var ipp = i + 2 if i + 2 < n else i + 2 - n
-        var imm = i - 2 if i >= 2 else i - 2 + n
-        for j in range(n):
-            var jp = j + 1 if j + 1 < n else j + 1 - n
-            var jm = j - 1 if j >= 1 else j - 1 + n
-            var jpp = j + 2 if j + 2 < n else j + 2 - n
-            var jmm = j - 2 if j >= 2 else j - 2 + n
+    for i in range(ny):
+        var ip = i + 1 if i + 1 < ny else i + 1 - ny
+        var im = i - 1 if i >= 1 else i - 1 + ny
+        var ipp = i + 2 if i + 2 < ny else i + 2 - ny
+        var imm = i - 2 if i >= 2 else i - 2 + ny
+        for j in range(nx):
+            var jp = j + 1 if j + 1 < nx else j + 1 - nx
+            var jm = j - 1 if j >= 1 else j - 1 + nx
+            var jpp = j + 2 if j + 2 < nx else j + 2 - nx
+            var jmm = j - 2 if j >= 2 else j - 2 + nx
             var v = _update[dt](
-                psi[unsafe_offset=i * n + j],
-                psi[unsafe_offset=ip * n + j],
-                psi[unsafe_offset=im * n + j],
-                psi[unsafe_offset=i * n + jp],
-                psi[unsafe_offset=i * n + jm],
-                psi[unsafe_offset=ipp * n + j],
-                psi[unsafe_offset=imm * n + j],
-                psi[unsafe_offset=i * n + jpp],
-                psi[unsafe_offset=i * n + jmm],
-                psi[unsafe_offset=ip * n + jp],
-                psi[unsafe_offset=ip * n + jm],
-                psi[unsafe_offset=im * n + jp],
-                psi[unsafe_offset=im * n + jm],
+                psi[unsafe_offset=i * nx + j],
+                psi[unsafe_offset=ip * nx + j],
+                psi[unsafe_offset=im * nx + j],
+                psi[unsafe_offset=i * nx + jp],
+                psi[unsafe_offset=i * nx + jm],
+                psi[unsafe_offset=ipp * nx + j],
+                psi[unsafe_offset=imm * nx + j],
+                psi[unsafe_offset=i * nx + jpp],
+                psi[unsafe_offset=i * nx + jmm],
+                psi[unsafe_offset=ip * nx + jp],
+                psi[unsafe_offset=ip * nx + jm],
+                psi[unsafe_offset=im * nx + jp],
+                psi[unsafe_offset=im * nx + jm],
                 step_dt,
                 inv_dx2,
             )
             if noise_amp != 0.0:
-                v += noise_amp * _divnoise[dt](n, i, j, im, jm, seed, step)
-            nxt[unsafe_offset=i * n + j] = v
+                v += noise_amp * _divnoise[dt](nx, i, j, im, jm, seed, step)
+            nxt[unsafe_offset=i * nx + j] = v
 
 
 def _run_cpu[dt: DType](
     field: Pointer[Scalar[dt], MutAnyOrigin],
     snaps_addr: Int,
-    n: Int,
+    ny: Int,
+    nx: Int,
     nsteps: Int,
     nevery: Int,
     step_dt: Scalar[dt],
@@ -162,7 +166,7 @@ def _run_cpu[dt: DType](
     step0: Int,
 ) raises -> String:
     comptime esize = size_of[Scalar[dt]]()
-    var size = n * n
+    var size = ny * nx
     var owned_a = alloc(Layout[Scalar[dt]](count=size)).into_managed()
     var owned_b = alloc(Layout[Scalar[dt]](count=size)).into_managed()
     var a = Pointer[Scalar[dt], MutAnyOrigin](
@@ -176,7 +180,8 @@ def _run_cpu[dt: DType](
     var k = 0
     for s in range(1, nsteps + 1):
         _step_cpu[dt](
-            a, b, n, step_dt, inv_dx2, noise_amp, seed, UInt64(step0 + s - 1),
+            a, b, ny, nx, step_dt, inv_dx2, noise_amp, seed,
+            UInt64(step0 + s - 1),
         )
         swap(a, b)
         if s % nevery == 0:
@@ -195,7 +200,8 @@ def _run_cpu[dt: DType](
 def _run_accel[dt: DType](
     field: Pointer[Scalar[dt], MutAnyOrigin],
     snaps_addr: Int,
-    n: Int,
+    ny: Int,
+    nx: Int,
     nsteps: Int,
     nevery: Int,
     step_dt: Scalar[dt],
@@ -205,22 +211,23 @@ def _run_accel[dt: DType](
     step0: Int,
 ) raises -> String:
     comptime esize = size_of[Scalar[dt]]()
-    var size = n * n
+    var size = ny * nx
     var ctx = DeviceContext()
     var a = ctx.enqueue_create_buffer[dt](size)
     var b = ctx.enqueue_create_buffer[dt](size)
     ctx.enqueue_copy(dst_buf=a, src_ptr=field)
 
-    var layout = row_major(n, n)
+    var layout = row_major(ny, nx)
     comptime kern = _step_kernel[dt, type_of(layout)]
-    var grid = (ceildiv(n, TPB), ceildiv(n, TPB))
+    var grid = (ceildiv(nx, TPB), ceildiv(ny, TPB))
 
     var k = 0
     for s in range(1, nsteps + 1):
         ctx.enqueue_function[kern](
             TileTensor(a, layout),
             TileTensor(b, layout),
-            Int32(n),
+            Int32(ny),
+            Int32(nx),
             step_dt,
             inv_dx2,
             noise_amp,
@@ -239,13 +246,14 @@ def _run_accel[dt: DType](
 
     ctx.enqueue_copy(dst_ptr=field, src_buf=a)
     ctx.synchronize()
-    return String("accelerator")
+    return String("gpu")
 
 
 def _dispatch[dt: DType](
     field_addr: Int,
     snaps_addr: Int,
-    n: Int,
+    ny: Int,
+    nx: Int,
     nsteps: Int,
     nevery: Int,
     step_dt: Float64,
@@ -272,49 +280,51 @@ def _dispatch[dt: DType](
     comptime if not has_accelerator():
         if device == DEVICE_ACCEL:
             raise Error(
-                "accelerator requested but this build has no supported"
-                " accelerator"
+                "device='gpu' requested but this build has no supported"
+                " GPU"
             )
         return _run_cpu[dt](
-            field, snaps_addr, n, nsteps, nevery, sdt, sidx, samp, useed, step0,
+            field, snaps_addr, ny, nx, nsteps, nevery, sdt, sidx, samp, useed,
+            step0,
         )
     else:
         comptime if no_f64_on_accel:
             if device == DEVICE_ACCEL:
                 raise Error(
-                    "accelerator requested but it has no float64"
-                    " support; use dtype=float32"
+                    "device='gpu' requested but this GPU has no float64"
+                    " support (use dtype=float32)"
                 )
             return _run_cpu[dt](
-                field, snaps_addr, n, nsteps, nevery, sdt, sidx, samp, useed,
-                step0,
+                field, snaps_addr, ny, nx, nsteps, nevery, sdt, sidx, samp,
+                useed, step0,
             )
         else:
             if device == DEVICE_CPU:
                 return _run_cpu[dt](
-                    field, snaps_addr, n, nsteps, nevery, sdt, sidx, samp,
+                    field, snaps_addr, ny, nx, nsteps, nevery, sdt, sidx, samp,
                     useed, step0,
                 )
             if DeviceContext.number_of_devices() == 0:
                 if device == DEVICE_ACCEL:
                     raise Error(
-                        "accelerator requested but none was detected"
+                        "device='gpu' requested but no GPU was detected"
                         " at runtime"
                     )
                 return _run_cpu[dt](
-                    field, snaps_addr, n, nsteps, nevery, sdt, sidx, samp,
+                    field, snaps_addr, ny, nx, nsteps, nevery, sdt, sidx, samp,
                     useed, step0,
                 )
             return _run_accel[dt](
-                field, snaps_addr, n, nsteps, nevery, sdt, sidx, samp, useed,
-                step0,
+                field, snaps_addr, ny, nx, nsteps, nevery, sdt, sidx, samp,
+                useed, step0,
             )
 
 
 def run_chc(
     field_addr: Int,
     snaps_addr: Int,
-    n: Int,
+    ny: Int,
+    nx: Int,
     nsteps: Int,
     nevery: Int,
     step_dt: Float64,
@@ -327,10 +337,10 @@ def run_chc(
 ) raises -> String:
     if single:
         return _dispatch[DType.float32](
-            field_addr, snaps_addr, n, nsteps, nevery, step_dt, dx, eps, seed,
-            step0, device,
+            field_addr, snaps_addr, ny, nx, nsteps, nevery, step_dt, dx, eps,
+            seed, step0, device,
         )
     return _dispatch[DType.float64](
-        field_addr, snaps_addr, n, nsteps, nevery, step_dt, dx, eps, seed,
+        field_addr, snaps_addr, ny, nx, nsteps, nevery, step_dt, dx, eps, seed,
         step0, device,
     )

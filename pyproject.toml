@@ -39,7 +39,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-examples = ["matplotlib>=3.8"]
+examples = ["matplotlib>=3.8", "pillow>=10"]
 
 [project.urls]
 Homepage = "https://github.com/ivijayyadav/simpok"

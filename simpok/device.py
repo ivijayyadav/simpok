@@ -5,6 +5,7 @@ class Device(NamedTuple):
     available: bool
     name: str | None
     reason: str | None
+    kind: str
 
 
 def get_device() -> Device:
@@ -13,4 +14,6 @@ def get_device() -> Device:
     from .mojo_module import _get_device
 
     available, name, reason = _get_device()
-    return Device(available, name or None, reason or None)
+    return Device(
+        available, name or None, reason or None, "gpu" if available else "cpu"
+    )

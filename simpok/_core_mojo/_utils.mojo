@@ -14,12 +14,12 @@ comptime TWO_PI = 6.283185307179586
 def get_device() -> Tuple[Bool, String, String]:
     comptime if not has_accelerator():
         return (
-            False, String(""), String("no supported accelerator at build time")
+            False, String(""), String("no supported GPU at build time")
         )
     else:
         try:
             if DeviceContext.number_of_devices() == 0:
-                return (False, String(""), String("no accelerator detected"))
+                return (False, String(""), String("no GPU detected"))
             var ctx = DeviceContext()
             return (True, ctx.name(), String(""))
         except e:

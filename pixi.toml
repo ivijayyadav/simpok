@@ -9,6 +9,7 @@ version = "0.1.0"
 quick = "python -m examples.quickstart"
 tdgl = "python -m examples.tdgl_quickstart"
 chc = "python -m examples.chc_quickstart"
+sdsd = "python -m examples.sdsd_quickstart"
 
 [dependencies]
 python = "3.13.*"
